@@ -322,7 +322,7 @@ export default function UserEditPage({self}: {self?: boolean} = {}) {
     ),
     "Email": (
       <AccountItemRow name="Email" labelKey="general:Email">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
           <Input type="email" value={user.email ?? ""} disabled={!isAdmin} onChange={(e) => updateField("email", e.target.value)} />
           {isAdmin ? (
             <label className="flex shrink-0 items-center gap-2 text-sm">
