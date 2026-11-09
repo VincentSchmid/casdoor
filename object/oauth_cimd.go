@@ -182,18 +182,68 @@ func GetApplicationByClientIdMetadata(clientId string, organization string, lang
 	return getCimdApplicationOfOrganization(application, organization)
 }
 
+// GetApplicationForSignin resolves the organization-specific sign-in policy for
+// a shared CIMD application submitted by the login form.
+func GetApplicationForSignin(id string, organization string) (*Application, error) {
+	application, err := GetApplication(id)
+	if err != nil || application == nil || !application.IsShared || !util.InSlice(application.Tags, cimdTag) || !IsClientIdMetadataUrl(application.ClientId) {
+		return application, err
+	}
+	if organization == "" {
+		organization = cimdOrganization
+	}
+	if !IsClientIdMetadataDocumentSupported(organization) {
+		return nil, fmt.Errorf("client ID metadata documents are not accepted, enable dynamic client registration of the organization: %s first", organization)
+	}
+	return getCimdApplicationOfOrganization(application, organization)
+}
+
 // getCimdApplicationOfOrganization returns the shared application of a URL client_id as the application of an organization
 func getCimdApplicationOfOrganization(application *Application, organization string) (*Application, error) {
-	if application.Organization == organization {
-		return application, nil
-	}
-
-	application.Organization = organization
-	err := extendApplicationWithOrg(application)
+	defaultApplication, err := GetDefaultApplication(util.GetId("admin", organization))
 	if err != nil {
 		return nil, err
 	}
-	return application, nil
+
+	// Shared clients are stored under built-in, but sign-in policy belongs to the
+	// selected organization. Keep the stored client and its redirect URIs intact.
+	result := *application
+	result.Organization = organization
+	result.Providers = defaultApplication.Providers
+	result.SigninMethods = defaultApplication.SigninMethods
+	result.SigninItems = defaultApplication.SigninItems
+	result.EnablePassword = defaultApplication.EnablePassword
+	result.EnableCodeSignin = defaultApplication.EnableCodeSignin
+	result.EnableWebAuthn = defaultApplication.EnableWebAuthn
+	result.EnableSigninSession = defaultApplication.EnableSigninSession
+	result.EnableAutoSignin = defaultApplication.EnableAutoSignin
+	result.DisableSignin = defaultApplication.DisableSignin
+	result.Logo = defaultApplication.Logo
+	result.LogoDark = defaultApplication.LogoDark
+	result.Favicon = defaultApplication.Favicon
+	result.ThemeData = defaultApplication.ThemeData
+	result.FooterHtml = defaultApplication.FooterHtml
+	result.FormCss = defaultApplication.FormCss
+	result.FormCssMobile = defaultApplication.FormCssMobile
+	result.FormOffset = defaultApplication.FormOffset
+
+	err = extendApplicationWithOrg(&result)
+	if err != nil {
+		return nil, err
+	}
+	err = extendApplicationWithProviders(&result)
+	if err != nil {
+		return nil, err
+	}
+	err = extendApplicationWithSigninMethods(&result)
+	if err != nil {
+		return nil, err
+	}
+	err = extendApplicationWithSigninItems(&result)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // GetCimdOrganization returns the organization a URL client_id works for: the organization of the user
