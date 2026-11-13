@@ -1,0 +1,12 @@
+diff --git a/object/oauth_cimd.go b/object/oauth_cimd.go
+index 0db24febffee..8263759ce731 100644
+--- a/object/oauth_cimd.go
++++ b/object/oauth_cimd.go
+@@ -203,6 +203,7 @@ func getCimdApplicationOfOrganization(application *Application, organization str
+ 		application.FormCss = defaultApp.FormCss
+ 		application.SigninItems = defaultApp.SigninItems
+ 		application.SigninMethods = defaultApp.SigninMethods
++		application.Cert = defaultApp.Cert
+ 		application.Providers = defaultApp.Providers
+ 		application.EnablePassword = defaultApp.EnablePassword
+ 		application.EnableCodeSignin = defaultApp.EnableCodeSignin

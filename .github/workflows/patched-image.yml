@@ -1,0 +1,111 @@
+name: Build patched Casdoor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 5 * * *"
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/patched-image.yml
+      - patches/pr-6079.patch
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: casdoor-image
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - name: Check out build repository
+        uses: actions/checkout@v4
+
+      - name: Resolve latest stable Casdoor release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          version=$(gh api repos/casdoor/casdoor/releases/latest --jq .tag_name)
+          sha=$(gh api "repos/casdoor/casdoor/commits/${version}" --jq .sha)
+          {
+            echo "version=${version}"
+            echo "sha=${sha}"
+            echo "image=ghcr.io/${IMAGE_OWNER,,}/casdoor"
+          } >> "$GITHUB_OUTPUT"
+          echo "Building Casdoor ${version} (${sha}) with PR #6079"
+
+      - name: Check out Casdoor release
+        uses: actions/checkout@v4
+        with:
+          repository: casdoor/casdoor
+          ref: ${{ steps.release.outputs.sha }}
+          path: casdoor
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Apply PR 6079
+        working-directory: casdoor
+        run: |
+          set -euo pipefail
+          patch_file="${GITHUB_WORKSPACE}/patches/pr-6079.patch"
+          if git apply --check "$patch_file"; then
+            git apply "$patch_file"
+            echo "Applied PR #6079."
+          elif git apply --reverse --check "$patch_file"; then
+            echo "The release already contains the fix; no patch needed."
+          else
+            echo "::error::PR #6079 no longer applies cleanly. Review the upstream changes before publishing."
+            exit 1
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./casdoor
+          file: ./casdoor/Dockerfile
+          target: STANDARD
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.release.outputs.image }}:${{ steps.release.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.release.outputs.version }}
+            org.opencontainers.image.revision=${{ steps.release.outputs.sha }}
+            org.opencontainers.image.description=Casdoor with the shared CIMD client certificate fix (PR 6079)
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Write build summary
+        env:
+          IMAGE: ${{ steps.release.outputs.image }}
+          VERSION: ${{ steps.release.outputs.version }}
+          UPSTREAM_SHA: ${{ steps.release.outputs.sha }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo '## Patched Casdoor image'
+            echo
+            echo "- Versioned: \`${IMAGE}:${VERSION}\`"
+            echo "- Exact image: \`${IMAGE}@${DIGEST}\`"
+            echo "- Upstream commit: \`${UPSTREAM_SHA}\`"
+            echo '- Platform: linux/arm64 (Raspberry Pi 5 with a 64-bit OS)'
+          } >> "$GITHUB_STEP_SUMMARY"
