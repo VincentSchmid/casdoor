@@ -10,3 +10,18 @@ index 0db24febffee..8263759ce731 100644
  		application.Providers = defaultApp.Providers
  		application.EnablePassword = defaultApp.EnablePassword
  		application.EnableCodeSignin = defaultApp.EnableCodeSignin
+diff --git a/object/token_oauth_util.go b/object/token_oauth_util.go
+index e55967d..86526c1 100644
+--- a/object/token_oauth_util.go
++++ b/object/token_oauth_util.go
+@@ -719,6 +719,10 @@ func RefreshToken(application *Application, grantType string, refreshToken strin
+ 	if application.IsShared && IsClientIdMetadataUrl(application.ClientId) && application.Organization != user.Owner {
+ 		sharedApplication := *application
+ 		sharedApplication.Organization = user.Owner
++		// sign with the cert of the organization, like getCimdApplicationOfOrganization does at sign-in
++		if defaultApp, err := GetDefaultApplication(util.GetId("admin", user.Owner)); err == nil && defaultApp != nil {
++			sharedApplication.Cert = defaultApp.Cert
++		}
+ 		application = &sharedApplication
+ 	}
+ 

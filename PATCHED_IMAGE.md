@@ -7,8 +7,12 @@ using the built-in signing certificate instead of their organization's certifica
 - PR: https://github.com/casdoor/casdoor/pull/6079
 - Pinned fix commit: `4af4cea24a766e97757963daf36c59d02627aeb8`
 
-The one-line PR diff is stored in `patches/pr-6079.patch`; builds do not follow
-future edits to the PR branch.
+`patches/pr-6079.patch` holds the one-line PR diff (`object/oauth_cimd.go`; builds do
+not follow future edits to the PR branch) plus an additional fix that is not part of
+the PR: `RefreshToken` (`object/token_oauth_util.go`) adapts the shared CIMD
+application to the user's organization with a shallow copy that only sets
+`Organization`, so refreshed tokens were still signed with `cert-built-in`. The patch
+also copies `Cert` from the organization's default application there.
 
 ## Setup
 
